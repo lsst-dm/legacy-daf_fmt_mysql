@@ -6,4 +6,5 @@ from __future__ import absolute_import
 
 from .mysqlStorage import *
 from .butlerRepoCfgFmt import *
+from .afwTableSqlFormatter import *
 from .version import *
