@@ -138,6 +138,45 @@ class TestMySqlStorage(unittest.TestCase):
                          storage.search(uri, 'objectNameInStorage'))
         self.assertIsNone(storage.search(uri, 'nextNonExistingObjectName'))
 
+    def testButler(self):
+        """Test that
+        1. a repository can be crated and reloaded.
+        2. .getMapperClass works with the existing repository."""
+        dbName = "TestMySqlStorage"
+        self.removeDatabases.append(dbName)
+        uri = "mysql://{}:{}/{}".format(self.host, self.port, dbName)
+        # test that a mysql reqpository can be created
+        butler = dafPersist.Butler(outputs={'root': uri,
+                                            'mode': 'rw',
+                                            'mapper': MapperForTest})
+        # test that the repositoryCfg was saved in the repository by testing
+        # that a repository can be loaded as an input by only indicating root.
+        butler = dafPersist.Butler(inputs=uri)
+
+        self.assertEqual(dafPersist.Storage.getMapperClass(uri),
+                         MapperForTest)
+
+        # TODO assert the butler repo looks formed correctly
+
+    def testButlerRepoCfgBadVersion(self):
+        dbName = "TestMySqlStorage"
+        self.removeDatabases.append(dbName)
+        uri = "mysql://{}:{}/{}".format(self.host, self.port, dbName)
+        butler = dafPersist.Butler(outputs={'root': uri,
+                                            'mode': 'rw',
+                                            'mapper': MapperForTest})
+        # set a bad repoCfg version number
+        with closing(MySQLdb.connect(host=self.host, port=self.port, db=dbName,
+                                     read_default_file="~/.my.cnf")) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """UPDATE repositoryCfg
+                SET sVersion  = 2
+                WHERE id = 0""")
+            conn.commit()
+        with self.assertRaises(RuntimeError):
+            butler = dafPersist.Butler(inputs=uri)
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass

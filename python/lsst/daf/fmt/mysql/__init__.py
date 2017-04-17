@@ -5,4 +5,5 @@ from __future__ import absolute_import
 #
 
 from .mysqlStorage import *
+from .butlerRepoCfgFmt import *
 from .version import *
