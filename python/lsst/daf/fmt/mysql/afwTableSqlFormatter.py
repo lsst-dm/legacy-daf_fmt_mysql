@@ -7,6 +7,7 @@ import MySQLdb
 import math
 import re
 import struct
+import tempfile
 
 from . import MySqlStorage
 import lsst.afw.table as afw_table
@@ -490,10 +491,11 @@ class AfwTableSqlFormatter():
             else:
                 max_query_len = self.config.max_query_len
             self.log.debug("max_query_len: %d", max_query_len)
-            self._create_table(conn, table_name, cat.schema, db)
+            tempTableName = self._create_table(conn, cat.schema)
             if view_name is not None:
-                self._create_view(conn, table_name, view_name, cat.schema)
-            self._do_ingest(conn, cat, table_name, max_query_len)
+                self._create_view(conn, tempTableName, view_name, cat.schema)
+            self._do_ingest(conn, cat, tempTableName, max_query_len)
+            self._rename_table(conn, tempTableName, table_name)
 
     @staticmethod
     def connect(host, port, db):
@@ -572,11 +574,15 @@ class AfwTableSqlFormatter():
         sql_type = field_formatters[field.getTypeString()].sql_type(field)
         return self._column_name(field.getName()) + " " + sql_type
 
-    def _create_table(self, conn, table_name, schema, db):
-        """Create a table corresponding to the given afw table schema.
+    def _create_table(self, conn, schema):
+        """Create a table corresponding to the given afw table schema, indented
+        to be temporary for writing into safely in the presence of paralell
+        database access.
 
         Any extra columns specified in the task config are added in. If a
         unique id column exists, it is given a key.
+
+        Returns the name of the table that was created for writing into.
         """
         fields = [item.field for item in self._schema_items(schema)]
         names = [f.getName() for f in fields]
@@ -593,7 +599,8 @@ class AfwTableSqlFormatter():
                 "Use the remap configuration parameter to resolve this "
                 "ambiguity.".format(clashes)
             )
-        sql = "CREATE TABLE {} (\n\t".format(table_name)
+        tableName = next(tempfile._get_candidate_names())
+        sql = "CREATE TABLE {} (\n\t".format(tableName)
         sql += ",\n\t".join(self._column_def(field) for field in fields)
         if self.config.extra_columns:
             sql += ",\n\t" + self.config.extra_columns
@@ -606,13 +613,27 @@ class AfwTableSqlFormatter():
                     "No field matches the configured unique ID field name "
                     "(%s)", self.config.id_field_name)
         sql += "\n)"
-        try:
-            self._execute_sql(conn, sql)
-        except MySQLdb.OperationalError as e:
-            if e[0] == MYSQL_ER_TABLE_EXISTS_ERROR:
-                raise RuntimeError(
-                    "Table {} already exists in database repo {}.".format(
-                        table_name, db))
+        self._execute_sql(conn, sql)
+        return tableName
+
+    def _rename_table(self, conn, from_name, to_name):
+        """Rename a table, deleting the previous table at to_name if needed."""
+        self._testSqlIsClean(from_name)
+        self._testSqlIsClean(to_name)
+        cursor = conn.cursor()
+        num_tries = 3
+        for i in range(num_tries):
+            try:
+                cursor.execute("RENAME TABLE {} TO {}".format(from_name,
+                                                              to_name))
+                return
+            except MySQLdb.OperationalError as e:
+                if e[0] == MYSQL_ER_TABLE_EXISTS_ERROR:
+                    cursor.execute("DROP TABLE {}".format(to_name))
+        self.log.warn(
+            ("Could not rename temp table to final dataset name {}, " +
+             "perhaps another process is thrashing against this one?").format(
+                to_name))
 
     def _create_view(self, conn, table_name, view_name, schema):
         """Create a view allowing columns to be referred to by their aliases."""
@@ -645,5 +666,31 @@ class AfwTableSqlFormatter():
         sql += table_name
         self._execute_sql(conn, sql)
 
+    @staticmethod
+    def _testSqlIsClean(sql):
+        """Raise if illegal characters are found in the sql.
+
+        Most of the time we can be sure our sql is clean by allowing
+        execute() to substitute the user-generated strings into the sql
+        statement, for example
+        ``cursor.execute('select * from %s', (myTableName,))``.
+        However there are cases where this does not work, for example
+        generating a database with
+        ``cursor.execute("CREATE DATABASE IF NOT EXISTS %s", self.repoDbName)
+        will fail (because it puts the db name in quotes, which mysql does not
+        allow).
+
+        Parameters
+        ----------
+        sql : string
+            An SQL string to examine.
+
+        Raises
+        ------
+        RuntimeError
+            If illegal characters are foudn in the SQL string.
+        """
+        if ';' in sql:
+            raise RuntimeError("Illegal SQL.")
 
 MySqlStorage.registerFormatter(afw_table.BaseCatalog, AfwTableSqlFormatter)

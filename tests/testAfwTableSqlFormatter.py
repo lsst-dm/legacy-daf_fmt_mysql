@@ -100,13 +100,15 @@ class TestAfwTableSqlFormatter(unittest.TestCase):
         obj = butler.get('foo')
         self.assertEqual(obj.asAstropy(), outCat.asAstropy())
 
-        # Put a record in the same spot as the first one. The put should raise.
+        # Put a record in the same spot as the first one. Verify that it
+        # overwrites the first record.
         outCat1 = lsst.afw.table.BaseCatalog(schema)
         record = outCat1.addNew()
         record.set(aKey, 2.0)
         record.set(bKey, 2.5)
-        with self.assertRaises(RuntimeError):
-            butler.put(outCat1, 'foo')
+        butler.put(outCat1, 'foo')
+        obj1 = butler.get('foo')
+        self.assertEqual(obj1.asAstropy(), outCat1.asAstropy())
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
