@@ -13,6 +13,8 @@ from . import MySqlStorage
 import lsst.afw.table as afw_table
 from lsst.log import Log
 
+__all__ = ['AfwTableSqlFormatter']
+
 MYSQL_ER_TABLE_EXISTS_ERROR = 1050
 
 class FieldFormatter(object):
