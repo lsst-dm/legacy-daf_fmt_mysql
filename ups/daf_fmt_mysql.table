@@ -12,6 +12,7 @@ setupRequired(ndarray)
 setupRequired(daf_persistence)
 setupRequired(afw)
 setupRequired(python_mysqlclient)
+setupRequired(daf_io)
 
 # The following is boilerplate for all packages.
 # See Tech Note DMTN-001 for details on LSST_LIBRARY_PATH
