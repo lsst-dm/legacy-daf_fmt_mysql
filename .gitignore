@@ -6,6 +6,7 @@ pytest_session.txt
 *.os
 *.so
 *.cfgc
+*.cache/*
 *.pyc
 *_wrap.cc
 *Lib.py
