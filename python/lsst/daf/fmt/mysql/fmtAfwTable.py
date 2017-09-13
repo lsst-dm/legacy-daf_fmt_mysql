@@ -41,7 +41,7 @@ def write(engine, butlerLocation, obj):
     obj : object instance
         The object to write into the database.
     """
-    to_sql(obj, butlerLocation.getLocations()[0], engine)
+    to_sql(obj, butlerLocation.getLocations()[0], engine, if_exists='append')
 
 
 def read(engine, butlerLocation):

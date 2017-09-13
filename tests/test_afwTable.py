@@ -101,6 +101,40 @@ class TableIoTestCase(unittest.TestCase):
         cat_reloaded = butler.get('table')
         self._compare_table(cat_expected, cat_reloaded)
 
+    def test_append(self):
+        """Test that writing a base catalog to the same location appends the rows to the existing table."""
+        cat1 = _make_afw_base_catalog(
+            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
+        butler.put(cat1, 'table')
+        del butler
+
+        # add more data
+        cat2 = _make_afw_base_catalog(
+            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            ((42, 4.2), (24, 2.4)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
+        butler.put(cat2, 'table')
+        del butler
+
+        cat_expected = _make_afw_base_catalog(
+            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123), (42, 4.2), (24, 2.4)))
+
+        # Test reading back with raw object
+        engine = sqlalchemy.create_engine(dbLocation)
+        rows = engine.execute("select a, b from testname")
+        # FIXME: Hopefully tables implement __eq__ in the future
+        self._compare_table(cat_expected, rows)
+
+        # Test reading back via butler.get
+        butler = dafPersist.Butler(inputs=self.testDir)
+        cat_reloaded = butler.get('table')
+        self._compare_table(cat_expected, cat_reloaded)
+
     def test_no_cfg_root_raises_with_output_repo(self):
         """Right now we don't support writing a RepositoryCfg direcetly into a database. Test that an
         exception is raised if a cfgRoot is not specified for the database repository."""
