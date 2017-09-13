@@ -128,9 +128,49 @@ class TableIoTestCase(unittest.TestCase):
         self._compare_table(cat_expected, rows)
 
         # Test reading back via butler.get
-        butler = dafPersist.Butler(inputs=self.testDir)
+        butler = dafPersist.Butler(outputs={'root': self.testDir, 'mode': 'rw'})
         cat_reloaded = butler.get('table')
         self._compare_table(cat_expected, cat_reloaded)
+
+    def test_append_extra_field(self):
+        """Test that if a catalog with an extra column is appended to an existing catalog an exception is
+        raised."""
+        cat1 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'),
+             columnSchema('b', numpy.float64, 'b')],
+            ((12345, 1.2345), (4321, 4.123)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper,
+                                   'mode': 'rw'})
+        butler.put(cat1, 'table')
+
+        cat2 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'),
+             columnSchema('b', numpy.float64, 'b'),
+             columnSchema('c', numpy.int64, 'c')],
+            ((42, 4.2, 123), (24, 2.4, 234)))
+        with self.assertRaises(sqlalchemy.exc.OperationalError):
+            butler.put(cat2, 'table')
+
+    @unittest.expectedFailure
+    def test_reorder_fields(self):
+        """Test that if a catalog with an extra column is appended to an existing catalog an exception is
+        raised."""
+        cat1 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'),
+             columnSchema('b', numpy.float64, 'b')],
+            ((12345, 1.2345), (4321, 4.123)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper,
+                                   'mode': 'rw'})
+        butler.put(cat1, 'table')
+
+        cat2 = make_afw_base_catalog(
+            [columnSchema('a', numpy.float64, 'a'),
+             columnSchema('b', numpy.int64, 'b')],
+            ((4.2, 42,), (2.4, 24)))
+        with self.assertRaises(sqlalchemy.exc.OperationalError):
+            butler.put(cat2, 'table')
 
     def test_no_cfg_root_raises_with_output_repo(self):
         """Right now we don't support writing a RepositoryCfg direcetly into a database. Test that an
