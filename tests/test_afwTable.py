@@ -80,7 +80,9 @@ class TableIoTestCase(unittest.TestCase):
         """Test that Butler can write a BaseCatalog to an sqlite database, and that the database can be read
         by sqlalchemy and compares equal to the original.
         """
-        cat_expected = _make_afw_base_catalog()
+        cat_expected = _make_afw_base_catalog(
+            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
         butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
 
@@ -135,28 +137,8 @@ class TableIoTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             butler.getMapperClass(dbLocation)
 
-    def test_new_make_catalog(self):
-        cat1 = _make_afw_base_catalog()
-        s = [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')]
-        cat2 = _new_make_afw_base_catalog(s, ((12345, 1.2345), (4321, 4.123)))
-        self._compare_table(cat1, cat2)
 
-
-def _make_afw_base_catalog():
-    schema = lsst.afw.table.Schema()
-    aa = schema.addField("a", type=numpy.int64, doc="a")
-    bb = schema.addField("b", type=numpy.float64, doc="b")
-    cat = lsst.afw.table.BaseCatalog(schema)
-    row = cat.addNew()
-    row.set(aa, 12345)
-    row.set(bb, 1.2345)
-    row = cat.addNew()
-    row.set(aa, 4321)
-    row.set(bb, 4.123)
-    return cat
-
-
-def _new_make_afw_base_catalog(schemaItems, valueLists):
+def _make_afw_base_catalog(schemaItems, valueLists):
     schema = lsst.afw.table.Schema()
     columns = []
     for schemaItem in schemaItems:
