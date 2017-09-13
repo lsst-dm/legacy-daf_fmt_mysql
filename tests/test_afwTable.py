@@ -21,6 +21,7 @@
 #
 
 
+import collections
 import numpy
 import os
 import tempfile
@@ -31,6 +32,9 @@ import unittest
 import lsst.utils.tests
 from lsst.daf.fmt.mysql import SqlStorage
 import lsst.daf.persistence as dafPersist
+
+
+schemaItem = collections.namedtuple('schemaItem', 'name type doc')
 
 
 def setup_module(module):
@@ -131,6 +135,12 @@ class TableIoTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             butler.getMapperClass(dbLocation)
 
+    def test_new_make_catalog(self):
+        cat1 = _make_afw_base_catalog()
+        s = [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')]
+        cat2 = _new_make_afw_base_catalog(s, ((12345, 1.2345), (4321, 4.123)))
+        self._compare_table(cat1, cat2)
+
 
 def _make_afw_base_catalog():
     schema = lsst.afw.table.Schema()
@@ -143,6 +153,19 @@ def _make_afw_base_catalog():
     row = cat.addNew()
     row.set(aa, 4321)
     row.set(bb, 4.123)
+    return cat
+
+
+def _new_make_afw_base_catalog(schemaItems, valueLists):
+    schema = lsst.afw.table.Schema()
+    columns = []
+    for schemaItem in schemaItems:
+        columns.append(schema.addField(schemaItem.name, schemaItem.type, schemaItem.doc))
+    cat = lsst.afw.table.BaseCatalog(schema)
+    for values in valueLists:
+        row = cat.addNew()
+        for value, column in zip(values, columns):
+            row.set(column, value)
     return cat
 
 
