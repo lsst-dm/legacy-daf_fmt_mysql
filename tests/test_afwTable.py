@@ -31,7 +31,7 @@ import unittest
 import lsst.utils.tests
 from lsst.daf.fmt.mysql import SqlStorage
 import lsst.daf.persistence as dafPersist
-from dafFmtMysqlTestUtils import make_afw_base_catalog, schemaItem
+from dafFmtMysqlTestUtils import make_afw_base_catalog, columnSchema
 
 
 def setup_module(module):
@@ -78,7 +78,7 @@ class TableIoTestCase(unittest.TestCase):
         by sqlalchemy and compares equal to the original.
         """
         cat_expected = make_afw_base_catalog(
-            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
             ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
         butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
@@ -101,7 +101,7 @@ class TableIoTestCase(unittest.TestCase):
     def test_append(self):
         """Test that writing a base catalog to the same location appends the rows to the existing table."""
         cat1 = make_afw_base_catalog(
-            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
             ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
         butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
@@ -110,7 +110,7 @@ class TableIoTestCase(unittest.TestCase):
 
         # add more data
         cat2 = make_afw_base_catalog(
-            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
             ((42, 4.2), (24, 2.4)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
         butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
@@ -118,7 +118,7 @@ class TableIoTestCase(unittest.TestCase):
         del butler
 
         cat_expected = make_afw_base_catalog(
-            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
             ((12345, 1.2345), (4321, 4.123), (42, 4.2), (24, 2.4)))
 
         # Test reading back with raw object

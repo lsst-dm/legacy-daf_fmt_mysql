@@ -26,14 +26,28 @@ import collections
 import lsst.afw.table
 
 
-schemaItem = collections.namedtuple('schemaItem', 'name type doc')
+columnSchema = collections.namedtuple('columnSchema', 'name type doc')
 
 
-def make_afw_base_catalog(schemaItems, valueLists):
+def make_afw_base_catalog(columnSchemaList, valueLists):
+    """Create an AFW BaseCatalog.
+
+    Parameters
+    ----------
+    columnSchemaList : list of columnSchema
+        The name, type, and documentation string for each column in the table.
+    valueLists : list of lists
+        Each outer list represents a row. Each item in the inner list represents a column in a row.
+
+    Returns
+    -------
+    lsst.afw.table.BaseCatalog
+        A BaseCatalog generated according to the inputs.
+    """
     schema = lsst.afw.table.Schema()
     columns = []
-    for schemaItem in schemaItems:
-        columns.append(schema.addField(schemaItem.name, schemaItem.type, schemaItem.doc))
+    for columnSchema in columnSchemaList:
+        columns.append(schema.addField(columnSchema.name, columnSchema.type, columnSchema.doc))
     cat = lsst.afw.table.BaseCatalog(schema)
     for values in valueLists:
         row = cat.addNew()
