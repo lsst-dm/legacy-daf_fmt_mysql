@@ -21,7 +21,6 @@
 #
 
 
-import collections
 import numpy
 import os
 import tempfile
@@ -32,9 +31,7 @@ import unittest
 import lsst.utils.tests
 from lsst.daf.fmt.mysql import SqlStorage
 import lsst.daf.persistence as dafPersist
-
-
-schemaItem = collections.namedtuple('schemaItem', 'name type doc')
+from dafFmtMysqlTestUtils import make_afw_base_catalog, schemaItem
 
 
 def setup_module(module):
@@ -80,7 +77,7 @@ class TableIoTestCase(unittest.TestCase):
         """Test that Butler can write a BaseCatalog to an sqlite database, and that the database can be read
         by sqlalchemy and compares equal to the original.
         """
-        cat_expected = _make_afw_base_catalog(
+        cat_expected = make_afw_base_catalog(
             [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
             ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
@@ -103,7 +100,7 @@ class TableIoTestCase(unittest.TestCase):
 
     def test_append(self):
         """Test that writing a base catalog to the same location appends the rows to the existing table."""
-        cat1 = _make_afw_base_catalog(
+        cat1 = make_afw_base_catalog(
             [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
             ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
@@ -112,7 +109,7 @@ class TableIoTestCase(unittest.TestCase):
         del butler
 
         # add more data
-        cat2 = _make_afw_base_catalog(
+        cat2 = make_afw_base_catalog(
             [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
             ((42, 4.2), (24, 2.4)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
@@ -120,7 +117,7 @@ class TableIoTestCase(unittest.TestCase):
         butler.put(cat2, 'table')
         del butler
 
-        cat_expected = _make_afw_base_catalog(
+        cat_expected = make_afw_base_catalog(
             [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
             ((12345, 1.2345), (4321, 4.123), (42, 4.2), (24, 2.4)))
 
@@ -170,19 +167,6 @@ class TableIoTestCase(unittest.TestCase):
         self.assertIsInstance(butler.getMapperClass(self.testDir), type(MyMapper))
         with self.assertRaises(RuntimeError):
             butler.getMapperClass(dbLocation)
-
-
-def _make_afw_base_catalog(schemaItems, valueLists):
-    schema = lsst.afw.table.Schema()
-    columns = []
-    for schemaItem in schemaItems:
-        columns.append(schema.addField(schemaItem.name, schemaItem.type, schemaItem.doc))
-    cat = lsst.afw.table.BaseCatalog(schema)
-    for values in valueLists:
-        row = cat.addNew()
-        for value, column in zip(values, columns):
-            row.set(column, value)
-    return cat
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
