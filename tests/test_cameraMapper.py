@@ -100,10 +100,24 @@ class TestCameraMapper(unittest.TestCase):
         self._compare_table(cat_expected, rows)
 
         # Test reading back via butler.get
-        butler = dafPersist.Butler(inputs=self.testDir)
+        butler = dafPersist.Butler(outputs={'root': self.testDir, 'mode': 'rw'})
         self.assertTrue(butler.datasetExists('table'))
         cat_reloaded = butler.get('table')
         self._compare_table(cat_expected, cat_reloaded)
+
+        # append more data and test reading it back
+        cat2 = make_afw_base_catalog(
+            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            ((42, 4.2), (24, 2.4)))
+        butler.put(cat2, 'table')
+
+        appended_cat_expected = make_afw_base_catalog(
+            [schemaItem('a', numpy.int64, 'a'), schemaItem('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123), (42, 4.2), (24, 2.4)))
+
+        # Test reading back via butler.get
+        appended_cat_reloaded = butler.get('table')
+        self._compare_table(appended_cat_expected, appended_cat_reloaded)
 
     def _compare_table(self, afw_cat, rows):
         columns = [str(i.field.getName()) for i in afw_cat.schema]
