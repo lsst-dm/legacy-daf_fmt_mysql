@@ -33,6 +33,7 @@ import lsst.utils.tests
 from lsst.daf.fmt.mysql import SqlStorage
 import lsst.daf.persistence as dafPersist
 from lsst.obs.base import CameraMapper
+from dafFmtMysqlTestUtils import make_afw_base_catalog, columnSchema
 
 
 def setup_module(module):
@@ -80,7 +81,9 @@ class TestCameraMapper(unittest.TestCase):
         """Test that Butler can write a BaseCatalog to an sqlite database, and that the database can be read
         by sqlalchemy and compares equal to the original.
         """
-        cat_expected = _make_afw_base_catalog()
+        cat_expected = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
         butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
 
@@ -97,30 +100,30 @@ class TestCameraMapper(unittest.TestCase):
         self._compare_table(cat_expected, rows)
 
         # Test reading back via butler.get
-        butler = dafPersist.Butler(inputs=self.testDir)
+        butler = dafPersist.Butler(outputs={'root': self.testDir, 'mode': 'rw'})
         self.assertTrue(butler.datasetExists('table'))
         cat_reloaded = butler.get('table')
         self._compare_table(cat_expected, cat_reloaded)
+
+        # append more data and test reading it back
+        cat2 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((42, 4.2), (24, 2.4)))
+        butler.put(cat2, 'table')
+
+        appended_cat_expected = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123), (42, 4.2), (24, 2.4)))
+
+        # Test reading back via butler.get
+        appended_cat_reloaded = butler.get('table')
+        self._compare_table(appended_cat_expected, appended_cat_reloaded)
 
     def _compare_table(self, afw_cat, rows):
         columns = [str(i.field.getName()) for i in afw_cat.schema]
         for cat1_row, cat2_row in zip(afw_cat, rows):
             for column in columns:
                 self.assertEqual(cat1_row[column], cat2_row[column])
-
-
-def _make_afw_base_catalog():
-    schema = lsst.afw.table.Schema()
-    aa = schema.addField("a", type=numpy.int64, doc="a")
-    bb = schema.addField("b", type=numpy.float64, doc="b")
-    cat = lsst.afw.table.BaseCatalog(schema)
-    row = cat.addNew()
-    row.set(aa, 12345)
-    row.set(bb, 1.2345)
-    row = cat.addNew()
-    row.set(aa, 4321)
-    row.set(bb, 4.123)
-    return cat
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

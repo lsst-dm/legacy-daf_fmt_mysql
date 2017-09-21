@@ -31,6 +31,7 @@ import unittest
 import lsst.utils.tests
 from lsst.daf.fmt.mysql import SqlStorage
 import lsst.daf.persistence as dafPersist
+from dafFmtMysqlTestUtils import make_afw_base_catalog, columnSchema
 
 
 def setup_module(module):
@@ -76,7 +77,9 @@ class TableIoTestCase(unittest.TestCase):
         """Test that Butler can write a BaseCatalog to an sqlite database, and that the database can be read
         by sqlalchemy and compares equal to the original.
         """
-        cat_expected = _make_afw_base_catalog()
+        cat_expected = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123)))
         dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
         butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
 
@@ -94,6 +97,80 @@ class TableIoTestCase(unittest.TestCase):
         butler = dafPersist.Butler(inputs=self.testDir)
         cat_reloaded = butler.get('table')
         self._compare_table(cat_expected, cat_reloaded)
+
+    def test_append(self):
+        """Test that writing a base catalog to the same location appends the rows to the existing table."""
+        cat1 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
+        butler.put(cat1, 'table')
+        del butler
+
+        # add more data
+        cat2 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((42, 4.2), (24, 2.4)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper})
+        butler.put(cat2, 'table')
+        del butler
+
+        cat_expected = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'), columnSchema('b', numpy.float64, 'a')],
+            ((12345, 1.2345), (4321, 4.123), (42, 4.2), (24, 2.4)))
+
+        # Test reading back with raw object
+        engine = sqlalchemy.create_engine(dbLocation)
+        rows = engine.execute("select a, b from testname")
+        # FIXME: Hopefully tables implement __eq__ in the future
+        self._compare_table(cat_expected, rows)
+
+        # Test reading back via butler.get
+        butler = dafPersist.Butler(outputs={'root': self.testDir, 'mode': 'rw'})
+        cat_reloaded = butler.get('table')
+        self._compare_table(cat_expected, cat_reloaded)
+
+    def test_append_extra_field(self):
+        """Test that if a catalog with an extra column is appended to an existing catalog an exception is
+        raised."""
+        cat1 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'),
+             columnSchema('b', numpy.float64, 'b')],
+            ((12345, 1.2345), (4321, 4.123)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper,
+                                   'mode': 'rw'})
+        butler.put(cat1, 'table')
+
+        cat2 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'),
+             columnSchema('b', numpy.float64, 'b'),
+             columnSchema('c', numpy.int64, 'c')],
+            ((42, 4.2, 123), (24, 2.4, 234)))
+        with self.assertRaises(sqlalchemy.exc.OperationalError):
+            butler.put(cat2, 'table')
+
+    @unittest.expectedFailure
+    def test_reorder_fields(self):
+        """Test that if a catalog with an extra column is appended to an existing catalog an exception is
+        raised."""
+        cat1 = make_afw_base_catalog(
+            [columnSchema('a', numpy.int64, 'a'),
+             columnSchema('b', numpy.float64, 'b')],
+            ((12345, 1.2345), (4321, 4.123)))
+        dbLocation = os.path.join('sqlite:///', os.path.relpath(self.testDir), 'test.db')
+        butler = dafPersist.Butler(outputs={'cfgRoot': self.testDir, 'root': dbLocation, 'mapper': MyMapper,
+                                   'mode': 'rw'})
+        butler.put(cat1, 'table')
+
+        cat2 = make_afw_base_catalog(
+            [columnSchema('a', numpy.float64, 'a'),
+             columnSchema('b', numpy.int64, 'b')],
+            ((4.2, 42,), (2.4, 24)))
+        with self.assertRaises(sqlalchemy.exc.OperationalError):
+            butler.put(cat2, 'table')
 
     def test_no_cfg_root_raises_with_output_repo(self):
         """Right now we don't support writing a RepositoryCfg direcetly into a database. Test that an
@@ -130,20 +207,6 @@ class TableIoTestCase(unittest.TestCase):
         self.assertIsInstance(butler.getMapperClass(self.testDir), type(MyMapper))
         with self.assertRaises(RuntimeError):
             butler.getMapperClass(dbLocation)
-
-
-def _make_afw_base_catalog():
-    schema = lsst.afw.table.Schema()
-    aa = schema.addField("a", type=numpy.int64, doc="a")
-    bb = schema.addField("b", type=numpy.float64, doc="b")
-    cat = lsst.afw.table.BaseCatalog(schema)
-    row = cat.addNew()
-    row.set(aa, 12345)
-    row.set(bb, 1.2345)
-    row = cat.addNew()
-    row.set(aa, 4321)
-    row.set(bb, 4.123)
-    return cat
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
